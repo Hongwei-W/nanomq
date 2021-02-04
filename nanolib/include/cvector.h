@@ -9,7 +9,6 @@
  * @brief cvector_vector_type - The vector type used in this library
  */
 #define cvector(type) type *
-
 /**
  * @brief cvector_set_capacity - For internal use, sets the capacity variable of the vector
  * @param vec - the vector

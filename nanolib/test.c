@@ -1,7 +1,7 @@
 #include <string.h>
 #include "include/nanolib.h" 
 
-#define NUM_THREADS 10000
+#define NUM_THREADS 8
 
 db_tree *db = NULL;
 
@@ -168,11 +168,16 @@ static void test_search_client()
 static void *test_unique(void *t)
 {
         s_client *c = (s_client*)t;
-        // search_and_insert(db, topic0, c);
-        // search_and_insert(db, topic0, c);
-        search_and_insert(db, topic0, c);
-        // print_db_tree(db);
-        search_and_delete(db, topic0, c);
+
+        for (int i = 0; i < 10000; i++) {
+                // search_and_insert(db, topic0, c);
+                // search_and_insert(db, topic0, c);
+                search_and_insert(db, topic0, c);
+                // cvector(s_client*) v =  NULL;
+                // v = search_client(db, topic0);
+                // print_db_tree(db);
+                search_and_delete(db, topic0, c);
+        }
         pthread_exit(NULL);
 }
 
@@ -214,12 +219,13 @@ int main(int argc, char *argv[])
 
 
         test_concurrent();
-        for (int i = 0; i < 10000; i++) {
-                test_insert();
-                //test_search_client();
-        }
+        //for (int i = 0; i < 10000; i++) {
+        //        test_insert();
+        //        //test_search_client();
+        //}
 
         // test_delete();
+        test_search_client();
         print_db_tree(db);
 
         puts("---------------TEST FINISHED----------------\n");
