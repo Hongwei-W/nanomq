@@ -1,7 +1,7 @@
 #ifndef MQTT_DB_H
 #define MQTT_DB_H
 
-#include <stdbool.h>
+#include <stdbool.h> 
 #include <stdint.h>
 #include <pthread.h>
 #include "cvector.h"
@@ -75,9 +75,11 @@ void destory_db_tree(db_tree *db);
 
 void print_db_tree(db_tree *db);
 
-int search_and_insert(db_tree *db, char *topic, s_client *client);
+int search_and_insert(db_tree *db, char *topic, char *id, void *ctxt);
+// int search_and_insert(db_tree *db, char *topic, s_client *client);
 
 void *search_and_delete(db_tree *db, char *topic, s_client *client);
+// void *search_and_delete(db_tree *db, char *topic, s_client *client);
 
 void **search_client(db_tree *db, char *topic);
 
