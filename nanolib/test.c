@@ -140,30 +140,30 @@ static void test_delete()
 }
 
 
-static void test_search_client()
-{
-        cvector(s_client*) v =  NULL;
-        v = search_client(db, topic0);
-
-        puts("================Return client==============");
-        if (v) {
-                for (int i = 0; i < cvector_size(v); ++i) {
-                        log("client id: %s", v[i]->id);
-                }
-        }
-
-        // if (v) {
-        // 	for (int i = 0; i < cvector_size(v); ++i) {
-        //                 for (int j = 0; j < cvector_size(v[i]); j++) {
-        //                         log("client id: %s", v[i][j]->id);
-        //                 }
-        //         }
-
-        // }
-
-
-
-}
+// static void test_search_client()
+// {
+//         cvector(s_client*) v =  NULL;
+//         v = search_client(db, topic0);
+// 
+//         puts("================Return client==============");
+//         if (v) {
+//                 for (int i = 0; i < cvector_size(v); ++i) {
+//                         log("client id: %s", v[i]->id);
+//                 }
+//         }
+// 
+//         // if (v) {
+//         // 	for (int i = 0; i < cvector_size(v); ++i) {
+//         //                 for (int j = 0; j < cvector_size(v[i]); j++) {
+//         //                         log("client id: %s", v[i][j]->id);
+//         //                 }
+//         //         }
+// 
+//         // }
+// 
+// 
+// 
+// }
 
 static void *test_unique(void *t)
 {
@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
         //}
 
         // test_delete();
-        test_search_client();
+        // test_search_client();
         print_db_tree(db);
 
         puts("---------------TEST FINISHED----------------\n");

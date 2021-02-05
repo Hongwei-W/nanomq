@@ -687,32 +687,36 @@ static s_client ***collect_clients(s_client ***vec, db_node **nodes, db_node ***
  * @param v - client
  * @return s_client 
  */
-static s_client **iterate_client(s_client ***v)
+static void **iterate_client(s_client ***v)
 {
-        cvector(s_client*) clients = NULL;
+        cvector(void*) ctxts = NULL;
+        cvector(char*) ids = NULL;
 
 	if (v) {
 		for (int i = 0; i < cvector_size(v); ++i) {
                         for (int j = 0; j < cvector_size(v[i]); j++) {
 			        bool equal = false;
-			        for (int k = 0; k < cvector_size(clients); k++) {
-			        	if (!strcmp(clients[k]->id, v[i][j]->id)) {
+			        for (int k = 0; k < cvector_size(ids); k++) {
+			        	if (!strcmp(ids[k], v[i][j]->id)) {
 			        		equal = true;
 			        		break;
 			        	}
 			        }
 
 			        if (equal == false) {
-			        	cvector_push_back(clients, v[i][j]);
+			        	cvector_push_back(ctxts, v[i][j]->ctxt);
+			        	cvector_push_back(ids, v[i][j]->id);
 			        }
 
                                 log("client id: %s", v[i][j]->id);
                         }
                 }
 
+                cvector_free(ids);
+
 	}
 
-	return clients;
+	return ctxts;
 }
 
 /**
@@ -721,7 +725,7 @@ static s_client **iterate_client(s_client ***v)
  * @param topic - topic
  * @return s_client 
  */
-cvector(s_client*) search_client(db_tree *db, char *topic)
+void **search_client(db_tree *db, char *topic)
 {
 	// pthread_rwlock_rdlock(&(db->rwlock));
         assert(db && topic);

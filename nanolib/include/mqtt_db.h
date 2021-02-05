@@ -79,7 +79,7 @@ int search_and_insert(db_tree *db, char *topic, s_client *client);
 
 void *search_and_delete(db_tree *db, char *topic, s_client *client);
 
-cvector(s_client*) search_client(db_tree *db, char *topic);
+void **search_client(db_tree *db, char *topic);
 
 // 
 // void del_all(uint32_t pipe_id, void *db);
