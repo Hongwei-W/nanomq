@@ -5,6 +5,7 @@
 #include <nng/nng.h>
 #include <nng/supplemental/util/platform.h>
 #include <nng/protocol/mqtt/mqtt.h>
+#include <nanolib.h>
 
 struct work {
 	enum {
@@ -16,7 +17,7 @@ struct work {
 	nng_ctx         ctx;
 	nng_pipe        pid;
 	nng_mtx       * mutex;
-	struct db_tree *db;
+	db_tree       * db;
 
 	struct pipe_content       *pipe_ct;
 	conn_param                *cparam;

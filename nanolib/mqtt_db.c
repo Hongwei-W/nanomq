@@ -788,6 +788,8 @@ void **search_client(db_tree *db, char *topic)
         }
 
         // log("node->topic %s, topic_queue %s", node->topic, *topic_queue);
+		log("1. %s", *topic_queue);
+		log("2. %s", topic_queue[1]);
 
         while (*topic_queue && (!cvector_empty(nodes))) {
 
