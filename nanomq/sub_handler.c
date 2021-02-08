@@ -44,7 +44,7 @@ uint8_t decode_sub_message(emq_work * work)
 
 	// handle variable header
 	variable_ptr = nng_msg_variable_ptr(msg);
-	fprintf(stderr, "111111111111111111");
+	fprintf(stderr, "111111111111111111\n");
 	debug_msg("22222222222222222222222");
 
 	packet_subscribe * sub_pkt = work->sub_pkt;
@@ -254,6 +254,7 @@ uint8_t sub_ctx_handle(emq_work * work)
 	char * topic_str = NULL;
 	char * client_id = NULL;
 	int    topic_len = 0;
+        struct topic_queue * tq = NULL;
 
 	// insert ctx_sub into treeDB
 	while (topic_node_t) {
@@ -272,13 +273,20 @@ uint8_t sub_ctx_handle(emq_work * work)
 
 		client_id = (char *)conn_param_get_clentid((conn_param *)nng_msg_get_conn_param(work->msg));
 		search_and_insert(work->db, topic_str, client_id, cli_ctx);
-		fprintf(stderr, "111 cli ctx [%p]", cli_ctx);
+		fprintf(stderr, "111 cli ctx [%p]\n", cli_ctx);
+
+                add_topic(client_id, topic_str);
+                add_pipe_id(work->pid.id, client_id);
+                         // check
+                tq = get_topic(client_id);
+                debug_msg("-----CHECKHASHTABLE----clientid: [%s]---topic: [%s]---pipeid: [%d]",
+                        client_id, tq->topic, work->pid.id);
 
 #ifdef DEBUG
 		// check
-		client_ctx ** cli= (client_ctx **)search_client(work->db, topic_str);
-		fprintf(stderr, "222 cli ctx [%p]", cli[0]);
-		debug_msg("client count [%d]", cvector_size(cli));
+		// client_ctx ** cli= (client_ctx **)search_client(work->db, topic_str);
+		// fprintf(stderr, "222 cli ctx [%p]\n", cli[0]);
+		// debug_msg("client count [%d]", cvector_size(cli));
 #endif
 
 /*
