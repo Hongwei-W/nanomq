@@ -573,9 +573,9 @@ nano_pipe_start(void *arg)
 static void lmq_to_sock(nni_lmq *lmq, nano_sock *s){
 
     while (nni_lmq_len(lmq) != 0) {
-        nng_msg* new_msg;
+        nni_msg* new_msg;
         nni_lmq_getq(lmq, &new_msg);
-        nano_conn_param *para = new_msg->cparam;
+        conn_param *para = nni_msg_get_conn_param(new_msg);
         struct mqtt_string client_id = para->clientid;
 
         // for debug only -- starts --
