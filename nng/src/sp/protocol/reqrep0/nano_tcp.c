@@ -56,6 +56,7 @@ struct nano_sock {
 	nni_mtx        lk;
 	nni_atomic_int ttl;
 	nni_id_map     pipes;
+	nni_id_map     clsessions;
 	nni_list       recvpipes; // list of pipes with data to receive
 	nni_list       recvq;
 	nano_ctx       ctx;		//base socket
@@ -323,6 +324,7 @@ nano_sock_fini(void *arg)
 	nano_sock *s = arg;
 
 	nni_id_map_fini(&s->pipes);
+	nni_id_map_fini(&s->clsessions);
 	nano_ctx_fini(&s->ctx);
 	nni_pollable_fini(&s->writable);
 	nni_pollable_fini(&s->readable);
@@ -339,6 +341,7 @@ nano_sock_init(void *arg, nni_sock *sock)
 	nni_mtx_init(&s->lk);
 
 	nni_id_map_init(&s->pipes, 0, 0, false);
+	nni_id_map_init(&s->clsessions, 0, 0, false);
 	NNI_LIST_INIT(&s->recvq, nano_ctx, rqnode);
 	NNI_LIST_INIT(&s->recvpipes, nano_pipe, rnode);
 
@@ -567,6 +570,28 @@ nano_pipe_start(void *arg)
 	return (0);
 }
 
+static void lmq_to_sock(nni_lmq *lmq, nano_sock *s){
+
+    while (nni_lmq_len(lmq) != 0) {
+        nng_msg* new_msg;
+        nni_lmq_getq(lmq, &new_msg);
+        nano_conn_param *para = new_msg->cparam;
+        struct mqtt_string client_id = para->clientid;
+
+        // for debug only -- starts --
+        printf("clientbody: %s\n", client_id.body);
+        // for debug only -- ends --
+        
+        uint32_t key = DJBHashn(client_id.body, client_id.len);
+
+        // for debug only -- starts --
+        printf("its djbhashed value: [%d]\n", key);
+        // for debug only -- starts --
+
+        nni_id_set(&s->clsessions, key, new_msg);
+    }
+}
+
 static void
 nano_pipe_close(void *arg)
 {
@@ -585,6 +610,8 @@ nano_pipe_close(void *arg)
 	if (nni_list_active(&s->recvpipes, p)) {
 		nni_list_remove(&s->recvpipes, p);
 	}
+	//copy qlmq to sock->clmq
+	lmq_to_sock(&p->qlmq, s);
 
 	nni_lmq_flush(&p->qlmq);
 	nni_lmq_flush(&p->rlmq);
