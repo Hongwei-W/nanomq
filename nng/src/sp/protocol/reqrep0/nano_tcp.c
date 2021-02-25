@@ -570,26 +570,34 @@ nano_pipe_start(void *arg)
 	return (0);
 }
 
-static void lmq_to_sock(nni_lmq *lmq, nano_sock *s){
+static int lmq_to_sock(nni_lmq *lmq, nano_sock *s){
 
+   if (nni_lmq_len(lmq) == 0){
+        return 0;
+    }
+    
     while (nni_lmq_len(lmq) != 0) {
-        nni_msg* new_msg;
+        nni_msg *new_msg;
         nni_lmq_getq(lmq, &new_msg);
         conn_param *para = nni_msg_get_conn_param(new_msg);
         struct mqtt_string client_id = para->clientid;
-
-        // for debug only -- starts --
-        printf("clientbody: %s\n", client_id.body);
-        // for debug only -- ends --
-        
         uint32_t key = DJBHashn(client_id.body, client_id.len);
 
-        // for debug only -- starts --
-        printf("its djbhashed value: [%d]\n", key);
-        // for debug only -- starts --
-
-        nni_id_set(&s->clsessions, key, new_msg);
+        if ((nni_id_get(&s->clsessions, key)) == NULL){
+            nni_lmq* temp_lmq = malloc(sizeof(nni_lmq));
+            nni_lmq_init(temp_lmq, 1);
+            nni_lmq_putq(temp_lmq, new_msg);
+            nni_id_set(&s->clsessions, key, temp_lmq);
+        }
+        else {
+            void* temp_lmq = nni_id_get(&s->clsessions, key);
+            if (nni_lmq_full(temp_lmq)){
+                nni_lmq_resize(temp_lmq, (size_t) nni_lmq_cap(temp_lmq)+2);
+            }
+            nni_lmq_putq(temp_lmq, new_msg);
+        }   
     }
+    return 0;
 }
 
 static void
