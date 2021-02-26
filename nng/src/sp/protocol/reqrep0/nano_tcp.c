@@ -571,8 +571,7 @@ nano_pipe_start(void *arg)
 }
 
 static int lmq_to_sock(nni_lmq *lmq, nano_sock *s){
-
-   if (nni_lmq_len(lmq) == 0){
+    if (nni_lmq_len(lmq) == 0){
         return 0;
     }
     
@@ -828,7 +827,7 @@ nano_pipe_recv_cb(void *arg)
 			goto drop;
 			break;
         case CMD_PUBACK:
-		case CMD_PUBREC:
+		case CMD_PUBREC:/*
             debug_msg("ack received!");
 			nni_mtx_lock(&p->lk);
             uint8_t *ptr;
@@ -854,7 +853,7 @@ nano_pipe_recv_cb(void *arg)
                 index++;
             }
             //nanomq sdk
-			nni_mtx_unlock(&p->lk);
+			nni_mtx_unlock(&p->lk);*/
 			goto drop;
             break;
 		default:
