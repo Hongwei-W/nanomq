@@ -279,6 +279,7 @@ nano_ctx_send(void *arg, nni_aio *aio)
 				nni_msg_free(old1);
 			}
 			nni_lmq_putq(&p->qlmq, msg);
+			debug_msg("put into qlmq");
     	}
     }
 
@@ -571,15 +572,34 @@ nano_pipe_start(void *arg)
 }
 
 static int lmq_to_sock(nni_lmq *lmq, nano_sock *s){
+	/*
+	int len = (int)nni_lmq_len(lmq);
+	debug_msg("the length of qlmq is %d", len);
     if (nni_lmq_len(lmq) == 0){
         return 0;
     }
-    
-    while (nni_lmq_len(lmq) != 0) {
-        nni_msg *new_msg;
+    */
+    while (1) {
+		int len = (int)nni_lmq_len(lmq);
+		debug_msg("the length of qlmq is %d", len);
+		if (len == 0){
+        	return 0;
+   		}	
+
+        void *new_msg;
         nni_lmq_getq(lmq, &new_msg);
+		if (new_msg == NULL) {
+			debug_msg("Cannot get the coresponding message in qlmq");
+			return -1;
+		}
         conn_param *para = nni_msg_get_conn_param(new_msg);
-        struct mqtt_string client_id = para->clientid;
+		if (para == NULL) {
+			int cmd_type = nng_msg_cmd_type(new_msg);
+			debug_msg("%d",cmd_type);
+			debug_msg("Cannot get the coresponding connection parameter from the message");
+			return -1;
+		}
+		struct mqtt_string client_id = para->clientid;
         uint32_t key = DJBHashn(client_id.body, client_id.len);
 
         if ((nni_id_get(&s->clsessions, key)) == NULL){
@@ -587,13 +607,17 @@ static int lmq_to_sock(nni_lmq *lmq, nano_sock *s){
             nni_lmq_init(temp_lmq, 1);
             nni_lmq_putq(temp_lmq, new_msg);
             nni_id_set(&s->clsessions, key, temp_lmq);
+			debug_msg("One instance of qlmq is inserted into hash table successfully, put as new instance");
         }
         else {
             void* temp_lmq = nni_id_get(&s->clsessions, key);
             if (nni_lmq_full(temp_lmq)){
                 nni_lmq_resize(temp_lmq, (size_t) nni_lmq_cap(temp_lmq)+2);
             }
+			debug_msg("One instance of qlmq is inserted into hash table successfully, put with old instance");
             nni_lmq_putq(temp_lmq, new_msg);
+		
+		
         }   
     }
     return 0;
