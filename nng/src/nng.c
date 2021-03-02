@@ -1965,6 +1965,11 @@ nng_msg_get_conn_param(nng_msg *msg)
 	p = nni_msg_get_conn_param(msg);
 	return p;
 }
+void
+nng_msg_set_conn_param(nng_msg *msg, conn_param *cparam)
+{
+	nni_msg_set_conn_param(msg, (void *)cparam);
+}
 
 void
 nng_msg_set_cmd_type(nng_msg *m, uint8_t cmd)

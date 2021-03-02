@@ -264,6 +264,8 @@ server_cb(void *arg)
 						p_info = work->pipe_ct->pipe_info[work->pipe_ct->current_index];
 						nng_msg_clone(smsg);
 						work->msg = smsg;
+						nng_msg_set_conn_param(smsg, work->cparam);
+						nng_msg_set_cmd_type(smsg, CMD_PUBLISH);
 						nng_aio_set_msg(work->aio, work->msg);
 						work->msg = NULL;
 
