@@ -73,7 +73,10 @@ extern uint8_t       nni_msg_get_preset_qos(nni_msg *m);
 extern uint16_t      nni_msg_get_pub_pid(nni_msg *m);
 extern void          nni_msg_set_qos(nni_msg *m, uint8_t qos);
 
-extern conn_param *nni_msg_get_conn_param(nni_msg *m);
+//extern int 			 nni_init_conn_param(conn_param *cp);
+extern conn_param*	 nni_msg_get_conn_param(nni_msg *m);
+extern void 		 nni_msg_free_conn_param(nni_msg *m);
+extern int 			 nni_msg_set_one_store_cp(nni_msg **mp, void* ptr);
 
 typedef struct conn_propt    conn_propt;
 typedef struct mqtt_string   mqtt_string;

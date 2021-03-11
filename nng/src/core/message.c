@@ -464,7 +464,10 @@ nni_msg_realloc(nni_msg *m, size_t sz)
 
 void *
 nni_msg_header(nni_msg *m)
-{
+{	
+	if (m->m_header_buf == NULL)
+		debug_msg("It is null");	
+	debug_msg("%hhu", m->m_header_buf);
 	return (m->m_header_buf);
 }
 
@@ -659,6 +662,62 @@ nni_msg_get_conn_param(nni_msg *m)
 {
        return m->cparam;
 }
+
+void 
+nni_msg_free_conn_param(nni_msg *m)
+{
+	   nni_free(m->cparam, sizeof(m->cparam));
+}
+
+// nni_msg_set_msg_for_storing_cp() is a function init a special msg instance that is only storing a conn_param
+// This means that all elements inside msg are null except for conn_param
+// This function is used for storing client whose cleansession is set to 0
+// This msg will be destoryed immediately after a client session is restored
+int
+nni_msg_set_one_store_cp(nni_msg **mp, void* ptr){
+	nni_msg *m;
+
+	if ((m = NNI_ALLOC_STRUCT(m)) == NULL) {
+		return (NNG_ENOMEM);
+	}
+
+	nni_msg_set_conn_param(m, ptr);
+
+	nni_atomic_init(&m->m_refcnt);
+	nni_atomic_set(&m->m_refcnt, 1);
+
+	*mp = m;
+	return (0);
+}
+
+/*
+int
+nni_msg_dup2(nni_msg **dup, const nni_msg *src)
+{
+	nni_msg *m;
+	int      rv;
+
+	if ((m = NNI_ALLOC_STRUCT(m)) == NULL) {
+		return (NNG_ENOMEM);
+	}
+
+	if src->m
+	memcpy(m->m_header_buf, src->m_header_buf, src->m_header_len);
+	m->m_header_len = src->m_header_len;
+
+	if ((rv = nni_chunk_dup(&m->m_body, &src->m_body)) != 0) {
+		NNI_FREE_STRUCT(m);
+		return (rv);
+	}
+
+	m->m_pipe = src->m_pipe;
+	nni_atomic_init(&m->m_refcnt);
+	nni_atomic_set(&m->m_refcnt, 1);
+
+	*dup = m;
+	return (0);
+}
+*/
 
 void
 nni_msg_set_remaining_len(nni_msg *m, size_t len)

@@ -22,6 +22,7 @@
 typedef struct nano_pipe nano_pipe;
 typedef struct nano_sock nano_sock;
 typedef struct nano_ctx  nano_ctx;
+typedef struct nano_clean_session nano_clean_session;
 
 static void nano_ctx_timeout(void *);
 static void nano_pipe_send_cb(void *);
@@ -53,15 +54,15 @@ struct nano_ctx {
 
 // nano_sock is our per-socket protocol private structure.
 struct nano_sock {
-	nni_mtx        lk;
-	nni_atomic_int ttl;
-	nni_id_map     pipes;
-	nni_id_map     clsessions;
-	nni_list       recvpipes; // list of pipes with data to receive
-	nni_list       recvq;
-	nano_ctx       ctx;		//base socket
-	nni_pollable   readable;
-	nni_pollable   writable;
+	nni_mtx        		 	lk;
+	nni_atomic_int 			ttl;
+	nni_id_map     			pipes;
+	nni_id_map		     	clsessions;
+	nni_list       			recvpipes; // list of pipes with data to receive
+	nni_list       			recvq;
+	nano_ctx       			ctx;		//base socket
+	nni_pollable   			readable;
+	nni_pollable   			writable;
 };
 
 // nano_pipe is our per-pipe protocol private structure.
@@ -84,6 +85,11 @@ struct nano_pipe {
     nni_lmq         qlmq, rlmq;
     nni_timer_node  ka_timer;
     nni_timer_node  pipe_qos_timer;
+};
+
+struct nano_clean_session {
+	nni_lmq	*		msgs;
+	nni_id_map*		topics;
 };
 /*
 static void
@@ -541,6 +547,116 @@ nano_ctx_set_qsize(void *arg, void *arg2, const void *buf, size_t sz, nni_type t
 	return (0);
 }
 
+#define UPDATE_FIELD_INT(field, new_obj, old_obj) \
+	do { if (new_obj->field == 0) {\
+			new_obj->field = old_obj->field; \
+		}\
+	} while(0);
+
+#define UPDATE_FIELD_MQTT_STRING(field, sub_field, new_obj, old_obj) \
+	do { if (new_obj->field.sub_field == NULL && old_obj->field.sub_field != NULL) {\
+			new_obj->field = old_obj->field; \
+			new_obj->field.sub_field = strdup(old_obj->field.sub_field); \
+			}\
+	} while(0);
+
+#define UPDATE_FIELD_MQTT_STRING_PAIR(field, sub_field1, sub_field2, new_obj, old_obj) \
+	do { if ((new_obj->field.sub_field1 == NULL && old_obj->field.sub_field1 != NULL)|| \
+			(new_obj->field.sub_field2 == NULL && old_obj->field.sub_field2 != NULL)){ \
+			new_obj->field = old_obj->field; \
+			new_obj->field.sub_field1 = strdup(old_obj->field.sub_field1); \
+			new_obj->field.sub_field2 = strdup(old_obj->field.sub_field2); \
+			}\
+	} while(0);
+
+static void deep_copy_connparam(conn_param *new_cp, conn_param *cp){
+	UPDATE_FIELD_INT(pro_ver, new_cp, cp);
+	UPDATE_FIELD_INT(con_flag, new_cp, cp);
+	UPDATE_FIELD_INT(keepalive_mqtt, new_cp, cp);
+	UPDATE_FIELD_INT(clean_start, new_cp, cp);
+	UPDATE_FIELD_INT(will_flag, new_cp, cp);
+	UPDATE_FIELD_INT(will_retain, new_cp, cp);
+	UPDATE_FIELD_INT(will_qos, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(pro_name, body, new_cp, cp);
+	//UPDATE_FIELD_MQTT_STRING(clientid, body, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(will_topic, body, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(will_msg, body, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(username, body, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(password, body, new_cp, cp);
+	UPDATE_FIELD_INT(session_expiry_interval, new_cp, cp);
+	UPDATE_FIELD_INT(rx_max, new_cp, cp);
+	UPDATE_FIELD_INT(max_packet_size, new_cp, cp);
+	UPDATE_FIELD_INT(topic_alias_max, new_cp, cp);
+	UPDATE_FIELD_INT(req_resp_info, new_cp, cp);
+	UPDATE_FIELD_INT(req_problem_info, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(auth_method, body, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(auth_data, body, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING_PAIR(user_property, key, val, new_cp, cp);
+	UPDATE_FIELD_INT(will_delay_interval, new_cp, cp);
+	UPDATE_FIELD_INT(payload_format_indicator, new_cp, cp);
+	UPDATE_FIELD_INT(msg_expiry_interval, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(content_type, body, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(resp_topic, body, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING(corr_data, body, new_cp, cp);
+	UPDATE_FIELD_MQTT_STRING_PAIR(payload_user_property, key, val, new_cp, cp);
+}
+
+static int session_restore(nano_pipe *p, nano_sock *s){
+	conn_param *new_cp 	 		= p->conn_param;
+	uint32_t key		 		= DJBHashn(new_cp->clientid.body, new_cp->clientid.len);
+	uint8_t	clean_session_id	= new_cp->clean_start;
+	debug_msg("cleansession is set to be %hhu", new_cp->clean_start);
+
+	nano_clean_session *cs		= nni_id_get(&s->clsessions, key);
+	if (cs == NULL){
+		if (clean_session_id == 0) {
+			debug_msg("(CS=0) Session cannot restore, cannot find such a lmq in clsession(hashtable) based on the clientID given");
+			debug_msg("eithe first connect or lose the lmq backup");
+			return -1; 
+		}
+		else {
+			debug_msg("(CS=1) No need for restoring a session, no lmq stored in the hashtalbe");
+			return 0;
+		}
+	}
+
+	nni_lmq *msgs				= cs->msgs;
+	nni_id_map *topics			= cs->topics; //TODO 建立topics instance 指针，未实现功能
+	
+	debug_msg("%hhu",nni_lmq_len(msgs));
+	nni_msg *special_msg;
+	nni_lmq_getq(msgs, &special_msg);
+	if (special_msg == NULL){
+		debug_msg("Cannot find the speical msg instance in lmq, which is not a good sign for both situation (clean_session = 0 or 1");
+		return -1;
+	}
+	conn_param *cp 				= nni_msg_get_conn_param(special_msg);
+	nni_msg_free(special_msg);
+
+	//TODO: 将topic添加进来
+	
+	if (clean_session_id == 0) {
+		//destroy_conn_param(new_cp);
+		//p->conn_param = cp;
+		deep_copy_connparam(new_cp, cp);
+		destroy_conn_param(cp);
+		if (nni_lmq_len(msgs) == 0){
+			nni_lmq_fini(msgs);
+			free(cs);
+			nni_id_remove(&s->clsessions, key);
+		}
+		debug_msg("(CS=1) Session successfully restored");	
+	}
+	else {
+		destroy_conn_param(cp);
+		nni_lmq_fini(msgs);
+		free(cs);
+		nni_id_remove(&s->clsessions, key);
+		debug_msg("(CS=1) lmq successfully freed");
+	}
+	return 0;	
+}
+
 static int
 nano_pipe_start(void *arg)
 {
@@ -550,7 +666,7 @@ nano_pipe_start(void *arg)
 	//TODO check MQTT protocol version here
 	debug_msg("##########nano_pipe_start################");
 	/*
-	// TODO check peer protocol
+	// TODO check peer protocol 
 	if (nni_pipe_peer(p->pipe) != NNG_NANO_TCP_PEER) {
 		// Peer protocol mismatch.
 		return (NNG_EPROTO);
@@ -559,7 +675,30 @@ nano_pipe_start(void *arg)
     nni_mtx_lock(&s->lk);
     rv = nni_id_set(&s->pipes, nni_pipe_id(p->pipe), p);
     nni_aio_get_output(&p->aio_recv, 1);
-    nano_keepalive(p, NULL);
+	nano_keepalive(p, NULL);
+	session_restore(p, s);
+
+	debug_msg("In conn_param: %hhu", p->conn_param->pro_ver);
+	debug_msg("%hhu", p->conn_param->con_flag);
+	debug_msg("%hu", p->conn_param->keepalive_mqtt);
+	debug_msg("%hhu", p->conn_param->clean_start);
+	debug_msg("%hhu", p->conn_param->will_flag);
+	debug_msg("%hhu", p->conn_param->will_retain);
+	debug_msg("%hhu", p->conn_param->will_qos);
+	debug_msg("%s", p->conn_param->pro_name.body);
+	debug_msg("%s", p->conn_param->clientid.body);
+	debug_msg("%s", p->conn_param->will_topic.body);
+	debug_msg("%s", p->conn_param->will_msg.body);
+	debug_msg("%s", p->conn_param->username.body);
+	debug_msg("%s", p->conn_param->password.body);
+	debug_msg("%u", p->conn_param->will_delay_interval);
+	debug_msg("%hhu", p->conn_param->payload_format_indicator);
+	debug_msg("%u", p->conn_param->msg_expiry_interval);
+	debug_msg("%s", p->conn_param->content_type.body);
+	debug_msg("%s", p->conn_param->resp_topic.body);
+	debug_msg("%s", p->conn_param->corr_data.body);
+	
+	//debug_msg("%s", p->conn_param->payload_user_property.body);
     nni_mtx_unlock(&s->lk);
     if (rv != 0) {
 		return (rv);
@@ -571,54 +710,78 @@ nano_pipe_start(void *arg)
 	return (0);
 }
 
-static int lmq_to_sock(nni_lmq *lmq, nano_sock *s){
-	/*
-	int len = (int)nni_lmq_len(lmq);
-	debug_msg("the length of qlmq is %d", len);
-    if (nni_lmq_len(lmq) == 0){
+static int session_cache(nni_lmq *lmq, nano_sock *s, conn_param *cp){
+	
+    if (cp->clean_start == 1){
         return 0;
     }
-    */
-    while (1) {
-		int len = (int)nni_lmq_len(lmq);
-		debug_msg("the length of qlmq is %d", len);
-		if (len == 0){
-        	return 0;
-   		}	
 
-        void *new_msg;
-        nni_lmq_getq(lmq, &new_msg);
-		if (new_msg == NULL) {
-			debug_msg("Cannot get the coresponding message in qlmq");
-			return -1;
-		}
-        conn_param *para = nni_msg_get_conn_param(new_msg);
-		if (para == NULL) {
-			int cmd_type = nng_msg_cmd_type(new_msg);
-			debug_msg("%d",cmd_type);
-			debug_msg("Cannot get the coresponding connection parameter from the message");
-			return -1;
-		}
-		struct mqtt_string client_id = para->clientid;
-        uint32_t key = DJBHashn(client_id.body, client_id.len);
+    uint32_t key 			= DJBHashn(cp->clientid.body, cp->clientid.len);
+	nni_id_map *clessions 	= &s->clsessions;
 
-        if ((nni_id_get(&s->clsessions, key)) == NULL){
-            nni_lmq* temp_lmq = malloc(sizeof(nni_lmq));
-            nni_lmq_init(temp_lmq, 1);
-            nni_lmq_putq(temp_lmq, new_msg);
-            nni_id_set(&s->clsessions, key, temp_lmq);
-			debug_msg("One instance of qlmq is inserted into hash table successfully, put as new instance");
-        }
-        else {
-            void* temp_lmq = nni_id_get(&s->clsessions, key);
-            if (nni_lmq_full(temp_lmq)){
-                nni_lmq_resize(temp_lmq, (size_t) nni_lmq_cap(temp_lmq)+2);
-            }
-			debug_msg("One instance of qlmq is inserted into hash table successfully, put with old instance");
-            nni_lmq_putq(temp_lmq, new_msg);
-		
-		
-        }   
+	conn_param *new_cp = calloc(sizeof(conn_param), 1);
+	init_conn_param(new_cp);
+	deep_copy_connparam(new_cp, cp);
+
+	// create a speical msg instance, where everything is null except for conn_param
+	// This is used for store the connection parameter 
+	nni_msg *special_msg;
+	if (nni_msg_set_one_store_cp(&special_msg, new_cp) != 0) {
+		debug_msg("problem occurs when build the speical msg (for storing conn_param");
+		return -1;
+	}
+
+	nni_lmq *temp_msgs;
+	if ((temp_msgs = calloc(1, sizeof(nni_lmq))) == NULL) {
+		debug_msg("problem occurs when create a lmq (for storing qlmq)");
+		return -1;
+	}
+	nni_lmq_init(temp_msgs, 1);
+	nni_lmq_putq(temp_msgs, special_msg);
+
+	// this steps re-backup the messages still in the clsession(hashtable)->lmq, prevent loss of messages
+	//TODO:只重新备份了lmq，没有重新备份topics
+	if (nni_id_get(clessions, key) != NULL) {
+		nano_clean_session 	*replace_cs = 		nni_id_get(clessions, key);
+		nni_lmq 			*replace_msgs = 		replace_cs->msgs;
+		nni_id_map 			*replace_topics = 	replace_cs->topics; //TODO：已经建立instance，没有备份
+		while (nni_lmq_len(replace_msgs) != 0){
+			nni_msg *new_msg;
+			nni_lmq_getq(replace_msgs, &new_msg);
+			if (nni_lmq_full(temp_msgs)){
+				nni_lmq_resize(temp_msgs, (size_t) nni_lmq_cap(temp_msgs)+2);
+			}
+			nni_lmq_putq(temp_msgs, new_msg);
+		}
+		nni_lmq_fini(replace_msgs);//TODO 还未remove topics的instance
+		nni_id_remove(clessions, key);
+	}
+
+	nano_clean_session *temp_cs = calloc(1, sizeof(nano_clean_session));
+	temp_cs->msgs = temp_msgs;
+
+	if (nni_id_set(clessions, key, temp_cs) != 0){
+		debug_msg("Error: The nano_clean_session structure is not set as a new instance of hashtable");
+		return -1;
+	} 
+
+	
+	//int len = (int)nni_lmq_len(lmq);
+	//debug_msg("the addr of lmq is [%p], length of qlmq is %d", lmq, len);
+
+    while (nni_lmq_len(lmq) != 0) {
+			
+        nni_msg *msg_in_lmq, *msg_in_templmq;
+        nni_lmq_getq(lmq, &msg_in_lmq);
+
+		nni_msg_header(msg_in_templmq);
+		if (nni_lmq_full(temp_msgs)){
+			nni_lmq_resize(temp_msgs, (size_t) nni_lmq_cap(temp_msgs)+2);
+		}
+		nni_msg_dup(&msg_in_templmq, msg_in_lmq);
+		nni_lmq_putq(temp_msgs, msg_in_templmq);
+		debug_msg("One instance of qlmq is inserted into hash table successfully, put with old instance");
+        
     }
     return 0;
 }
@@ -642,7 +805,7 @@ nano_pipe_close(void *arg)
 		nni_list_remove(&s->recvpipes, p);
 	}
 	//copy qlmq to sock->clmq
-	lmq_to_sock(&p->qlmq, s);
+	session_cache(&p->qlmq, s, p->conn_param);
 
 	nni_lmq_flush(&p->qlmq);
 	nni_lmq_flush(&p->rlmq);
