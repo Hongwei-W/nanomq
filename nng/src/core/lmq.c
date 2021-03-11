@@ -72,6 +72,7 @@ nni_lmq_flush(nni_lmq *lmq)
 size_t
 nni_lmq_len(nni_lmq *lmq)
 {
+	debug_msg("lmq: one instance is asked for length, the lmq is being porcessed: [%p], the length is [%u]", lmq, lmq->lmq_len);
 	return (lmq->lmq_len);
 }
 
@@ -109,6 +110,7 @@ int
 nni_lmq_getq(nni_lmq *lmq, nng_msg **msgp)
 {
 	nng_msg *msg;
+	//fprintf(stderr, "get lmq[%p] msg[]\n", lmq);
 	if (lmq->lmq_len == 0) {
 		return (NNG_EAGAIN);
 	}

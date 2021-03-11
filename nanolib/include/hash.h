@@ -13,6 +13,11 @@ struct topic_queue {
 	struct topic_queue *next;
 };
 
+struct cached_topic_queue {
+	char               *topic;
+	struct cached_topic_queue *next;
+};
+
 typedef struct topic_queue topic_queue;
 
 struct msg_queue {

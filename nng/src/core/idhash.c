@@ -174,7 +174,8 @@ id_resize(nni_id_map *m)
 
 int
 nni_id_remove(nni_id_map *m, uint32_t id)
-{
+{	
+	//debug_msg("idhash: one instance has been removedm its address [%p]", m);
 	size_t index;
 	size_t probe;
 
@@ -227,6 +228,7 @@ nni_id_set(nni_id_map *m, uint32_t id, void *val)
 	if ((index = id_find(m, id)) != (size_t) -1) {
 		ent      = &m->id_entries[index];
 		ent->val = val;
+	//fprintf(stderr, "getttttt size [%d]\n", m->id_count);
 		return (0);
 	}
 
@@ -243,6 +245,7 @@ nni_id_set(nni_id_map *m, uint32_t id, void *val)
 			m->id_count++;
 			ent->key = id;
 			ent->val = val;
+	//fprintf(stderr, "get size [%d]\n", m->id_count);
 			return (0);
 		}
 		// Record the skip count.  This being non-zero informs
